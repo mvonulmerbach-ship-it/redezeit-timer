@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Redezeit-Timer</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --green: #16a34a;
+    --yellow: #eab308;
+    --red: #dc2626;
+    --bg: #111827;
+  }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: #fff;
+    overflow: hidden;
+    user-select: none; -webkit-user-select: none;
+  }
+  #app {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    transition: background-color .4s ease;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #app.g { background: var(--green); }
+  #app.y { background: var(--yellow); }
+  #app.r { background: var(--red); }
+
+  /* ---- Timer-Ansicht ---- */
+  #timerView {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 16px;
+  }
+  #clock {
+    font-size: clamp(72px, 26vw, 220px);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -2px;
+    line-height: 1;
+    text-shadow: 0 2px 12px rgba(0,0,0,.25);
+  }
+  #targets {
+    margin-top: 22px;
+    display: flex;
+    gap: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    opacity: .85;
+  }
+  #targets span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,.4); }
+  .dot.g { background: var(--green); }
+  .dot.y { background: var(--yellow); }
+  .dot.r { background: var(--red); }
+
+  #controls {
+    display: flex;
+    gap: 14px;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    justify-content: center;
+  }
+  button {
+    font-family: inherit;
+    font-size: 19px;
+    font-weight: 700;
+    color: #fff;
+    background: rgba(255,255,255,.16);
+    border: 1.5px solid rgba(255,255,255,.35);
+    border-radius: 16px;
+    padding: 18px 0;
+    flex: 1;
+    max-width: 220px;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: transform .05s ease, background .2s ease;
+  }
+  button:active { transform: scale(.96); }
+  #startBtn { background: rgba(255,255,255,.28); }
+  #gear {
+    position: absolute; top: 14px; right: 16px;
+    width: 46px; height: 46px; flex: 0;
+    padding: 0; font-size: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; max-width: none;
+  }
+
+  /* ---- Einstellungen ---- */
+  #settings {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    display: none;
+    flex-direction: column;
+    padding: calc(24px + env(safe-area-inset-top)) 22px calc(24px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    z-index: 10;
+  }
+  #settings.open { display: flex; }
+  #settings h1 { font-size: 24px; margin: 0 0 4px; }
+  #settings p.sub { margin: 0 0 22px; opacity: .6; font-size: 14px; }
+  .field { margin-bottom: 20px; }
+  .field label { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 8px; font-size: 16px; }
+  .time-inputs { display: flex; align-items: center; gap: 8px; }
+  .time-inputs input {
+    width: 84px; font-size: 26px; font-weight: 700; text-align: center;
+    padding: 12px 0; border-radius: 12px; border: 1.5px solid #374151;
+    background: #1f2937; color: #fff; font-variant-numeric: tabular-nums;
+  }
+  .time-inputs .colon { font-size: 26px; font-weight: 700; }
+  .presetRow { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 26px; }
+  .presetRow button {
+    flex: 1 1 40%; font-size: 14px; padding: 12px 8px; max-width: none;
+    background: #1f2937; border-color: #374151;
+  }
+  .hint { font-size: 12px; opacity: .5; margin-top: -12px; margin-bottom: 20px; }
+  #closeSettings {
+    margin-top: auto; background: rgba(255,255,255,.28);
+    border-color: rgba(255,255,255,.4); max-width: none;
+  }
+</style>
+</head>
+<body>
+<div id="app" class="">
+  <div id="timerView">
+    <button id="gear" aria-label="Einstellungen">&#9881;</button>
+    <div id="clock">00:00</div>
+    <div id="targets">
+      <span><i class="dot g"></i><b id="tG">&ndash;</b></span>
+      <span><i class="dot y"></i><b id="tY">&ndash;</b></span>
+      <span><i class="dot r"></i><b id="tR">&ndash;</b></span>
+    </div>
+  </div>
+  <div id="controls">
+    <button id="startBtn">Start</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+
+  <div id="settings">
+    <h1>Zeiten einstellen</h1>
+    <p class="sub">Wann soll die Farbe wechseln? (Minuten : Sekunden)</p>
+
+    <div class="presetRow">
+      <button data-p="60,90,120">Stegreif 1&ndash;2 Min</button>
+      <button data-p="240,300,360">Kurzrede 4&ndash;6 Min</button>
+      <button data-p="300,360,420">Rede 5&ndash;7 Min</button>
+      <button data-p="420,480,540">Rede 7&ndash;9 Min</button>
+    </div>
+
+    <div class="field">
+      <label><i class="dot g"></i> Gr&uuml;n ab</label>
+      <div class="time-inputs">
+        <input id="gMin" type="number" min="0" max="59" inputmode="numeric"><span class="colon">:</span><input id="gSec" type="number" min="0" max="59" inputmode="numeric">
+      </div>
+    </div>
+    <div class="field">
+      <label><i class="dot y"></i> Gelb ab</label>
+      <div class="time-inputs">
+        <input id="yMin" type="number" min="0" max="59" inputmode="numeric"><span class="colon">:</span><input id="ySec" type="number" min="0" max="59" inputmode="numeric">
+      </div>
+    </div>
+    <div class="field">
+      <label><i class="dot r"></i> Rot ab</label>
+      <div class="time-inputs">
+        <input id="rMin" type="number" min="0" max="59" inputmode="numeric"><span class="colon">:</span><input id="rSec" type="number" min="0" max="59" inputmode="numeric">
+      </div>
+    </div>
+    <p class="hint">Bei jedem Farbwechsel vibriert das Handy kurz. Tippen aufs Bild = Start/Pause.</p>
+
+    <button id="closeSettings">Speichern</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var clock = document.getElementById('clock');
+  var startBtn = document.getElementById('startBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var gear = document.getElementById('gear');
+  var settings = document.getElementById('settings');
+  var closeSettings = document.getElementById('closeSettings');
+  var timerView = document.getElementById('timerView');
+
+  var ids = { g:['gMin','gSec'], y:['yMin','ySec'], r:['rMin','rSec'] };
+  var el = {};
+  for (var k in ids) { el[k] = [document.getElementById(ids[k][0]), document.getElementById(ids[k][1])]; }
+
+  // Standardzeiten: 5-7 Min Rede
+  var targets = { g: 300, y: 360, r: 420 };
+
+  var running = false, elapsed = 0, startTs = 0, raf = null;
+  var lastPhase = '';
+  var wakeLock = null;
+
+  function fmt(s) {
+    s = Math.max(0, Math.floor(s));
+    var m = Math.floor(s / 60);
+    var sec = s % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
+  }
+
+  function phaseFor(s) {
+    if (targets.r && s >= targets.r) return 'r';
+    if (targets.y && s >= targets.y) return 'y';
+    if (targets.g && s >= targets.g) return 'g';
+    return '';
+  }
+
+  function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch(e){} } }
+
+  function render() {
+    clock.textContent = fmt(elapsed);
+    var p = phaseFor(elapsed);
+    app.className = p;
+    if (p !== lastPhase) {
+      if (p === 'g') vibrate(200);
+      else if (p === 'y') vibrate([120,80,120]);
+      else if (p === 'r') vibrate([250,100,250,100,250]);
+      lastPhase = p;
+    }
+  }
+
+  function tick() {
+    elapsed = (Date.now() - startTs) / 1000;
+    render();
+    if (running) raf = requestAnimationFrame(tick);
+  }
+
+  async function requestWake() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+  }
+  function releaseWake() { if (wakeLock) { try { wakeLock.release(); } catch(e){} wakeLock = null; } }
+
+  function start() {
+    if (running) return;
+    running = true;
+    startTs = Date.now() - elapsed * 1000;
+    startBtn.textContent = 'Pause';
+    requestWake();
+    tick();
+  }
+  function pause() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    startBtn.textContent = 'Weiter';
+    releaseWake();
+  }
+  function toggle() { running ? pause() : start(); }
+  function reset() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    elapsed = 0; lastPhase = '';
+    startBtn.textContent = 'Start';
+    app.className = '';
+    releaseWake();
+    render();
+  }
+
+  function updateTargetLabels() {
+    document.getElementById('tG').textContent = fmt(targets.g);
+    document.getElementById('tY').textContent = fmt(targets.y);
+    document.getElementById('tR').textContent = fmt(targets.r);
+  }
+
+  function loadInputs() {
+    for (var k in el) {
+      el[k][0].value = Math.floor(targets[k] / 60);
+      el[k][1].value = targets[k] % 60;
+    }
+  }
+  function saveInputs() {
+    for (var k in el) {
+      var m = parseInt(el[k][0].value, 10) || 0;
+      var s = parseInt(el[k][1].value, 10) || 0;
+      targets[k] = m * 60 + s;
+    }
+    try { localStorage.setItem('redetimer', JSON.stringify(targets)); } catch(e){}
+    updateTargetLabels();
+  }
+
+  // Event-Handler
+  startBtn.addEventListener('click', toggle);
+  resetBtn.addEventListener('click', reset);
+  timerView.addEventListener('click', function (e) {
+    if (e.target === gear || e.target === startBtn || e.target === resetBtn) return;
+    toggle();
+  });
+  gear.addEventListener('click', function (e) {
+    e.stopPropagation();
+    loadInputs();
+    settings.classList.add('open');
+  });
+  closeSettings.addEventListener('click', function () {
+    saveInputs();
+    settings.classList.remove('open');
+  });
+
+  var presetBtns = document.querySelectorAll('.presetRow button');
+  for (var i = 0; i < presetBtns.length; i++) {
+    presetBtns[i].addEventListener('click', function () {
+      var v = this.getAttribute('data-p').split(',');
+      el.g[0].value = Math.floor(v[0]/60); el.g[1].value = v[0]%60;
+      el.y[0].value = Math.floor(v[1]/60); el.y[1].value = v[1]%60;
+      el.r[0].value = Math.floor(v[2]/60); el.r[1].value = v[2]%60;
+    });
+  }
+
+  // Re-Wake nach Tab-Wechsel
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && running) requestWake();
+  });
+
+  // Gespeicherte Zeiten laden
+  try {
+    var saved = localStorage.getItem('redetimer');
+    if (saved) { var o = JSON.parse(saved); if (o && 'g' in o) targets = o; }
+  } catch(e){}
+
+  updateTargetLabels();
+  render();
+})();
+</script>
+</body>
+</html>
